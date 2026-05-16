@@ -1,0 +1,33 @@
+# ── Core scientific stack ────────────────────────────────────────────────────
+numpy>=1.24
+pandas>=2.0
+scipy>=1.11
+scikit-learn>=1.3
+pyarrow>=14.0          # parquet I/O
+
+# ── PyTorch (CPU; swap for cu121 wheel if GPU available) ─────────────────────
+torch>=2.1
+torchvision>=0.16      # not needed at runtime, kept for compatibility
+
+# ── Elasticsearch client ─────────────────────────────────────────────────────
+elasticsearch>=8.10,<9.0
+
+# ── Streamlit frontend ───────────────────────────────────────────────────────
+streamlit>=1.30
+
+# ── Configuration / environment ──────────────────────────────────────────────
+pydantic>=2.0
+python-dotenv>=1.0
+
+# ── Recommender ──────────────────────────────────────────────────────────────
+# lenskit>=0.14          # item-item CF (stretch goal — uncomment when ready)
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+tqdm>=4.66
+pyyaml>=6.0
+
+# ── Dev / notebook ───────────────────────────────────────────────────────────
+jupyter>=1.0
+matplotlib>=3.8
+seaborn>=0.13
+ipykernel>=6.0
