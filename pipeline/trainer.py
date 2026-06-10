@@ -1,14 +1,7 @@
 """
-pipeline/trainer.py
--------------------
-Training loop, validation, checkpointing, and evaluation for RecipeNet.
+Training loop, checkpointing, and evaluation for RecipeNet (ported from Phase 2).
 
-Ported from Phase 2 (CS 615 / RecipeFeedback-ResNet src/trainer.py).
-
-Key change from Phase 2:
-    fit() no longer calls load_settings() internally to resolve the checkpoint
-    path. It now accepts checkpoint_dir: Path explicitly, keeping the trainer
-    decoupled from the filesystem layout.
+fit() accepts checkpoint_dir explicitly so the trainer has no filesystem coupling.
 """
 
 from __future__ import annotations
@@ -24,10 +17,6 @@ from tqdm import tqdm
 
 from core.models import AblationType, HeadType
 
-
-# ---------------------------------------------------------------------------
-# Loss functions
-# ---------------------------------------------------------------------------
 
 class LossFunc(Enum):
     MSE      = "mse"
@@ -46,20 +35,8 @@ class LogCoshLoss(nn.Module):
         return torch.mean(torch.log(torch.cosh(x + 1e-12)))
 
 
-# ---------------------------------------------------------------------------
-# Trainer
-# ---------------------------------------------------------------------------
-
 class Trainer:
-    """
-    Encapsulates training, validation, checkpointing, and evaluation.
-
-    Args:
-        model:        RecipeNet instance (moved to device internally).
-        train_loader: DataLoader for the training split.
-        val_loader:   DataLoader for the validation split.
-        config:       TrainConfig (or any object with the expected attributes).
-    """
+    """Training, validation, checkpointing, and evaluation for RecipeNet."""
 
     def __init__(self, model: nn.Module, train_loader, val_loader, config) -> None:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -89,8 +66,6 @@ class Trainer:
 
         self.current_ablation = AblationType.ALL_FEATURES
         self.best_model_path: Path | None = None
-
-    # ── Setup helpers ────────────────────────────────────────────────────────
 
     def _build_criterion(self, loss_setting) -> nn.Module:
         val = loss_setting.value if isinstance(loss_setting, LossFunc) else loss_setting
@@ -124,8 +99,6 @@ class Trainer:
             if p.grad is not None
         )
         return total ** 0.5
-
-    # ── Epoch-level methods ──────────────────────────────────────────────────
 
     def train_epoch(self) -> float:
         self.model.train()
@@ -169,8 +142,6 @@ class Trainer:
         self.history["val_loss"].append(avg_loss)
         return avg_loss
 
-    # ── Main training entry point ────────────────────────────────────────────
-
     def fit(
         self,
         epochs: int,
@@ -179,20 +150,7 @@ class Trainer:
         loss_fn: LossFunc,
         checkpoint_dir: Path,
     ) -> dict:
-        """
-        Train for up to `epochs` epochs with early stopping.
-
-        Args:
-            epochs:         Maximum number of training epochs.
-            head_type:      HeadType of the model being trained (for naming).
-            ablation:       AblationType controlling which input streams are active.
-            loss_fn:        LossFunc to use during training.
-            checkpoint_dir: Directory where the best checkpoint is saved.
-                            Replaces the Phase 2 internal load_settings() call.
-
-        Returns:
-            history dict with train_loss, val_loss, grad_norm, and metadata.
-        """
+        """Train with early stopping; returns history dict."""
         checkpoint_dir = Path(checkpoint_dir)
         checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
@@ -235,13 +193,10 @@ class Trainer:
                 print(f"\nEarly stopping at epoch {epoch} (no improvement for {patience} epochs).")
                 break
 
-        # Reload best weights before returning
         if checkpoint_path.exists():
             self.model.load_state_dict(torch.load(checkpoint_path, map_location=self.device))
 
         return self.history
-
-    # ── Evaluation ───────────────────────────────────────────────────────────
 
     def evaluate(
         self,
@@ -250,13 +205,7 @@ class Trainer:
         ablation: AblationType,
         return_embeddings: bool = False,
     ) -> tuple[dict, dict | None]:
-        """
-        Evaluate on a held-out loader. Reports MSE, RMSE, and MAE.
-
-        Returns:
-            metrics: dict with test_mse, test_rmse, test_mae.
-            bundle:  embedding bundle dict (or None if return_embeddings=False).
-        """
+        """Evaluate on a held-out loader; returns (metrics_dict, embedding_bundle_or_None)."""
         self.model.eval()
         total_mse = total_mae = 0.0
         all_embeddings, all_targets, all_preds, all_ids, all_names = [], [], [], [], []

@@ -1,0 +1,12 @@
+.git/
+.claude/
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+.env
+notebooks/
+.claude/
+pytest.ini
+tests/
+docker/es-snapshot/

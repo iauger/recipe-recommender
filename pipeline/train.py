@@ -1,23 +1,10 @@
 """
-pipeline/train.py
------------------
-Clean entry point for retraining RecipeNet (RESIDUAL_V2 / ALL_FEATURES / MSE).
+Entry point for retraining RecipeNet (RESIDUAL_V2 / ALL_FEATURES / MSE).
 
-Replaces the Phase 2 experiment-matrix main.py. The winning configuration
-is the fixed default — no sweep, no flag juggling.
-
-Usage:
-    python -m pipeline.train                         # default config
+    python -m pipeline.train
     python -m pipeline.train --epochs 150 --lr 5e-5
-    python -m pipeline.train --overwrite             # re-run preprocessing
-    python -m pipeline.train --skip-inference        # skip embedding generation
-
-Steps:
-    1. Preprocess raw data → PROCESSED_recipes.parquet + column_mapping.json
-    2. Split 70 / 15 / 15 (train / val / test) with fixed seed
-    3. Train RESIDUAL_V2 with early stopping
-    4. Evaluate on test set → print MSE / RMSE / MAE
-    5. Run full-corpus inference → overwrite embeddings_path bundle
+    python -m pipeline.train --overwrite
+    python -m pipeline.train --skip-inference
 """
 
 from __future__ import annotations
@@ -55,7 +42,6 @@ def main() -> None:
     cfg     = TrainConfig()
     s       = load_settings()
 
-    # Apply CLI overrides
     if args.epochs     is not None: cfg.epochs        = args.epochs
     if args.lr         is not None: cfg.learning_rate = args.lr
     if args.batch_size is not None: cfg.batch_size    = args.batch_size
@@ -68,12 +54,10 @@ def main() -> None:
     print(f"  LR        : {cfg.learning_rate} (head ×{cfg.lr_mult})")
     print(f"  Batch     : {cfg.batch_size}")
 
-    # ── 1. Preprocess ────────────────────────────────────────────────────────
     df = preprocess_data(s, overwrite_processed=args.overwrite)
     if args.report:
         preprocess_report(df)
 
-    # ── 2. Dataset and splits ────────────────────────────────────────────────
     full_dataset = RecipeDataset(df)
     total        = len(full_dataset)
     train_size   = int(0.70 * total)
@@ -94,7 +78,6 @@ def main() -> None:
     print(f"  Train    : {train_size:,} | Val: {val_size:,} | Test: {test_size:,}")
     print(f"  Meta dim : {full_dataset.meta_dim} | Tag dim: {full_dataset.tag_dim}")
 
-    # ── 3. Instantiate model ─────────────────────────────────────────────────
     model = RecipeNet(
         meta_in    = full_dataset.meta_dim,
         tag_in     = full_dataset.tag_dim,
@@ -104,7 +87,6 @@ def main() -> None:
         cat_meta   = full_dataset.cat_dim,
     )
 
-    # ── 4. Train ─────────────────────────────────────────────────────────────
     trainer = Trainer(model, train_loader, val_loader, cfg)
     history = trainer.fit(
         epochs         = cfg.epochs,
@@ -114,7 +96,6 @@ def main() -> None:
         checkpoint_dir = cfg.checkpoint_dir,
     )
 
-    # ── 5. Evaluate ──────────────────────────────────────────────────────────
     metrics, _ = trainer.evaluate(
         test_loader,
         head_type         = cfg.head_type,
@@ -127,21 +108,18 @@ def main() -> None:
     print(f"  Test RMSE: {metrics['test_rmse']:.4f}")
     print(f"  Test MAE : {metrics['test_mae']:.4f}")
 
-    # Save training history
     timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
     results_path = cfg.results_dir / f"results_{cfg.head_type.value}_{timestamp}.json"
     with open(results_path, "w") as f:
         json.dump(history, f, indent=4)
     print(f"\n  Results saved → {results_path}")
 
-    # Copy best checkpoint to the canonical model_path so search/reranker can load it
     if trainer.best_model_path and trainer.best_model_path.exists():
         import shutil
         s.model_path.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(trainer.best_model_path, s.model_path)
         print(f"  Checkpoint promoted → {s.model_path}")
 
-    # ── 6. Full-corpus inference ─────────────────────────────────────────────
     if not args.skip_inference:
         print("\n--- Generating embedding bundle ---")
         run_inference(

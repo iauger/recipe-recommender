@@ -1,17 +1,4 @@
-"""
-pipeline/inference.py
----------------------
-Full-corpus inference: loads the best RecipeNet checkpoint and produces
-the 128D embedding bundle used by the search and recommender components.
-
-Ported from Phase 2 (CS 615 / RecipeFeedback-ResNet src/inference.py).
-
-Changes from Phase 2:
-    - Imports updated to core.models / pipeline.dataset / core.config.
-    - Output path taken from settings.embeddings_path (unified config)
-      rather than os.path.join(s.best_model_dir, output_name).
-    - head_type defaults to PRODUCTION_HEAD (RESIDUAL_V2).
-"""
+"""Full-corpus inference: runs the production checkpoint over all recipes and saves the 128D embedding bundle."""
 
 from __future__ import annotations
 
@@ -35,24 +22,7 @@ def run_inference(
     batch_size: int = 1024,
     overwrite_processed: bool = False,
 ) -> dict:
-    """
-    Run full-corpus inference and save the embedding bundle.
-
-    Args:
-        settings:           Loaded Settings instance. Calls load_settings() if None.
-        model_path:         Path to the .pth checkpoint. Defaults to
-                            settings.model_path if not provided.
-        head_type:          Head architecture of the checkpoint. Must match
-                            how the model was trained. Defaults to PRODUCTION_HEAD.
-        output_path:        Where to save the embedding bundle (.pt).
-                            Defaults to settings.embeddings_path.
-        batch_size:         Inference batch size.
-        overwrite_processed: Re-run preprocessing even if cached parquet exists.
-
-    Returns:
-        embedding_bundle dict with keys:
-            recipe_ids, recipe_names, targets, predictions, embeddings (Tensor N×128).
-    """
+    """Run full-corpus inference and save the embedding bundle to output_path."""
     s           = settings or load_settings()
     model_path  = Path(model_path) if model_path else s.model_path
     output_path = Path(output_path) if output_path else s.embeddings_path
@@ -63,12 +33,10 @@ def run_inference(
     print(f"  Head       : {head_type.value}")
     print(f"  Device     : {device}")
 
-    # Load and prepare data
     df           = preprocess_data(s, overwrite_processed=overwrite_processed)
     full_dataset = RecipeDataset(df)
     loader       = DataLoader(full_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
 
-    # Instantiate model
     model = RecipeNet(
         meta_in    = full_dataset.meta_dim,
         tag_in     = full_dataset.tag_dim,
@@ -83,7 +51,7 @@ def run_inference(
 
     state_dict = torch.load(model_path, map_location=device)
 
-    # Handle Phase 2 legacy key name (legacy_meta_encoder → default_meta_encoder)
+    # Phase 2 checkpoints used "legacy_meta_encoder"; remap for compatibility.
     state_dict = {
         k.replace("legacy_meta_encoder", "default_meta_encoder"): v
         for k, v in state_dict.items()
@@ -91,7 +59,6 @@ def run_inference(
     model.load_state_dict(state_dict)
     model.eval()
 
-    # Run inference
     all_ids, all_names, all_targets, all_preds, all_embeddings = [], [], [], [], []
 
     print(f"  Processing {len(full_dataset):,} recipes …")

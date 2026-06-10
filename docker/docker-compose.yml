@@ -1,0 +1,40 @@
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.13.4
+    container_name: recipe_es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: recipe_app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../data:/app/data:ro
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_INDEX=recipes
+      # Override if your gold reviews file has a different name:
+      # - GOLD_REVIEWS_PATH=/app/data/gold_labeled_reviews_<timestamp>.parquet
+    restart: unless-stopped
+
+volumes:
+  esdata:

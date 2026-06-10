@@ -1,0 +1,37 @@
+# Reviewer quick start -- no data files or Python installation needed.
+#
+#   docker compose -f docker/docker-compose.prebuilt.yml up
+#
+# Open http://localhost:8501 when the log shows "Launching Streamlit on port 8501".
+# First run: pulls ~3-4 GB from Docker Hub. Subsequent runs start in ~30 seconds.
+# To stop: Ctrl-C, then: docker compose -f docker/docker-compose.prebuilt.yml down
+
+services:
+  elasticsearch:
+    image: iauger18/recipe-recommender-es:latest
+    container_name: recipe_es
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+
+  app:
+    image: iauger18/recipe-recommender-app:latest
+    container_name: recipe_app
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    environment:
+      - ES_HOST=http://elasticsearch:9200
+      - ES_INDEX=recipes
+    restart: unless-stopped
