@@ -200,13 +200,17 @@ recipe-recommender/
 │   └── main.py                 # Streamlit UI — Search + User History modes
 │
 ├── docker/
-│   └── docker-compose.yml      # Single-node Elasticsearch 8
+│   ├── Dockerfile                    # App container (Python 3.11, CPU PyTorch)
+│   ├── Dockerfile.es                 # Pre-indexed Elasticsearch image
+│   ├── docker-compose.prebuilt.yml   # Reviewer launch file (pulls from Docker Hub)
+│   ├── docker-compose.yml            # Dev setup (requires local data/)
+│   ├── entrypoint.sh                 # Container startup — waits for ES, launches Streamlit
+│   └── build-and-push.ps1            # One-time script to build and publish images
 │
-├── data/                       # Excluded from git — see Data section
+├── data/                       # Excluded from git — baked into Docker images
 ├── main.py                     # Unified CLI entry point
 ├── CAPSTONE_OVERVIEW.md        # Full project narrative for presentation/report
 ├── requirements.txt
-├── .env.example
 └── README.md
 ```
 
@@ -225,70 +229,6 @@ docker\build-and-push.ps1 -DockerUser yourdockerhubusername
 ```
 
 This takes 15–30 minutes (ES indexing + image builds + upload). When done it writes `docker/docker-compose.prebuilt.yml` — commit and include that file in your submission.
-
----
-
-### Local development setup
-
-### Prerequisites
-
-- Docker Desktop (required — runs both Elasticsearch and the app)
-
-### 1 — Place data files
-
-Create a `data/` directory at the project root and add the following files:
-
-| File | Source |
-|------|--------|
-| `PROCESSED_search_recipes.parquet` | Phase 3 ES-ready recipe corpus |
-| `final_residual_v2_embeddings.pt` | Phase 2 embedding bundle (recipe IDs + 128D vectors + quality scores) |
-| `best_model_residual_v2_all_features_mse.pth` | Phase 2 model checkpoint |
-| `column_mapping.json` | Phase 2 feature index map |
-| `gold_labeled_reviews.parquet` | Phase 1 sentiment-tagged reviews — rename your timestamped file to this name, or see the note below |
-
-> **Gold reviews filename:** If your Phase 1 output has a timestamp (`gold_labeled_reviews_<timestamp>.parquet`), either rename it to `gold_labeled_reviews.parquet` **or** uncomment and set the `GOLD_REVIEWS_PATH` override in `docker/docker-compose.yml`.
-
-### 2 — Build and run
-
-```bash
-docker compose -f docker/docker-compose.yml up --build
-```
-
-On first run this will:
-1. Pull the Elasticsearch 8 image and the Python 3.11 base image
-2. Install all Python dependencies (including CPU-only PyTorch — ~500 MB total)
-3. Wait for Elasticsearch to become healthy
-4. Index all recipes into Elasticsearch (~2–5 minutes depending on hardware)
-5. Launch Streamlit at **http://localhost:8501**
-
-Subsequent runs skip steps 1–4 and start in seconds.
-
-To stop: `Ctrl-C`, then `docker compose -f docker/docker-compose.yml down`.  
-The ES index persists in a named Docker volume (`esdata`) so re-indexing is not needed on restart.
-
----
-
-### Manual setup (alternative — requires Python 3.10+)
-
-```bash
-python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env            # then edit .env with your data file paths
-```
-
-Start Elasticsearch:
-
-```bash
-docker compose -f docker/docker-compose.yml up elasticsearch -d
-```
-
-Index and launch:
-
-```bash
-python main.py index
-python main.py app
-```
 
 ---
 
@@ -369,6 +309,12 @@ Uses `TrainConfig` defaults: lr=1e-4, batch=256, epochs=300, patience=20, RESIDU
 ## Data
 
 Data files are excluded from version control. Phase 2 artifacts are produced by the CS 615 project. Phase 1 output (`gold_labeled_reviews`) is a static input from the DSCI 632 project. Raw Food.com corpus available on Kaggle.
+
+---
+
+## AI assistance
+
+The recommender system, evaluation harness, and search pipeline were designed and implemented by me. Claude was used heavily as a coding assistant for the Streamlit UI (`app/main.py`) and the Docker deployment setup (`docker/`). These components were out of scope for the course, and honestly not within my skillset as a Data Analyst/aspiring Data Scientist.  
 
 ---
 
