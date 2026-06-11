@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -11,8 +11,6 @@ import torch
 import torch.nn.functional as F
 
 from core.models import RecipeNet, HeadType, AblationType
-from search.query_encoding import QueryFeatureProjector
-from search.search import retrieve_candidates
 
 _TEXT_COL_INDICES = {0, 1, 2, 3}   # columns skipped when building input tensors
 

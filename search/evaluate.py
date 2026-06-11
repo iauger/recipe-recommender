@@ -2,7 +2,6 @@
 
 import sys
 import io
-import copy
 if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding='utf-8')
 
@@ -374,5 +373,3 @@ if __name__ == "__main__":
     summary = evaluate_engine(top_k=5)
     print_summary(summary)
 
-    # for report in summary["query_reports"]:
-    #     print_query_detail(report)

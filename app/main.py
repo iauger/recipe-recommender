@@ -19,12 +19,11 @@ if isinstance(sys.stdout, io.TextIOWrapper):
     sys.stdout.reconfigure(encoding='utf-8')
 
 import streamlit as st
-import numpy as np
 
 from core.config import load_settings, get_es_client
 from search.engine import SearchEngine, SearchMode
 from search.evaluate import ndcg_at_k
-from recommender.engine import RecommenderEngine, RecommendMode
+from recommender.engine import RecommenderEngine
 
 
 # ---------------------------------------------------------------------------

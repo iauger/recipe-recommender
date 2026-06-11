@@ -7,7 +7,7 @@ dependency. Defaults reflect the Phase 2 winning config (RESIDUAL_V2 / MSE / lr=
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 from core.models import AblationType, HeadType, PRODUCTION_HEAD

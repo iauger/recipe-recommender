@@ -12,13 +12,12 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime
-from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader, random_split
 
 from core.config import load_settings
-from core.models import AblationType, PRODUCTION_HEAD, RecipeNet
+from core.models import PRODUCTION_HEAD, RecipeNet
 from pipeline.dataset import RecipeDataset
 from pipeline.inference import run_inference
 from pipeline.preprocessing import preprocess_data, preprocess_report

@@ -6,7 +6,6 @@ and write the training parquet and ES-ready search parquet (ported from Phase 2)
 from __future__ import annotations
 
 import json
-import os
 from typing import Tuple, cast
 
 import numpy as np

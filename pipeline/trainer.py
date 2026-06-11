@@ -6,7 +6,6 @@ fit() accepts checkpoint_dir explicitly so the trainer has no filesystem couplin
 
 from __future__ import annotations
 
-import os
 import time
 from enum import Enum
 from pathlib import Path

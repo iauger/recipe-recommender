@@ -1,7 +1,7 @@
-"""User profile builder for history-aware recommendations.
+"""Builds a user taste profile from their review history.
 
-Computes a recency-weighted 128-D taste centroid and a 17-D Phase 1 tag affinity
-vector from a user's gold_labeled_reviews history.
+Produces a recency-weighted embedding centroid and a tag affinity vector
+used by the hybrid recommender to personalize results.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ GLOBAL_RATING_MEAN = 4.4   # approximate; used for mean-centering star ratings
 
 @dataclass
 class ReviewRecord:
-    """Minimal structured view of a single user review."""
+    """One review: id, rating, timestamp, and per-tag intensity scores."""
     recipe_id: int
     star_rating: float
     timestamp: pd.Timestamp
@@ -30,7 +30,7 @@ class ReviewRecord:
 
 @dataclass
 class UserProfile:
-    """Aggregated preference signal for one user: 128-D taste centroid + 17-D tag affinity."""
+    """Aggregated taste signal for one user: embedding centroid + tag affinity vector."""
     user_id: Any
     embedding: Optional[torch.Tensor]
     tag_affinity: np.ndarray
@@ -45,22 +45,12 @@ def _recency_weight(timestamp: pd.Timestamp, now: pd.Timestamp, half_life_days: 
 
 
 def _rating_weight(star_rating: float) -> float:
-    """
-    Convert a 1-5 star rating to a positive weight.
-
-    Mean-centering (subtract ~4.4) yields a signed value; we add 1 so that
-    even average-rated recipes (deviation ~0) still contribute positively.
-    Clamped to [0.1, 2.0] to prevent negative weights from inverting the pull.
-    """
+    """Mean-centered rating mapped to a positive weight in [0.1, 2.0]."""
     return float(np.clip(1.0 + (star_rating - GLOBAL_RATING_MEAN), 0.1, 2.0))
 
 
 def _tag_columns(df: pd.DataFrame, culinary_tags: tuple[str, ...]) -> List[str]:
-    """Return intensity/sim column names present in the DataFrame.
-
-    Supports both 'intensity_*' (preprocessed recipes) and 'sim_*' (gold reviews
-    from Phase 1 Word2Vec pipeline) column naming conventions.
-    """
+    """Find tag columns in df, checking for both 'intensity_*' and 'sim_*' prefixes."""
     available = set(df.columns)
     cols = []
     for t in culinary_tags:
@@ -71,9 +61,7 @@ def _tag_columns(df: pd.DataFrame, culinary_tags: tuple[str, ...]) -> List[str]:
     return cols
 
 
-# ---------------------------------------------------------------------------
 # Public API
-# ---------------------------------------------------------------------------
 
 def load_user_review_history(
     gold_reviews_path: Any,
@@ -81,25 +69,10 @@ def load_user_review_history(
     culinary_tags: tuple[str, ...],
     min_reviews: int = 1,
 ) -> Tuple[List[ReviewRecord], bool]:
-    """
-    Load and parse a single user's review history from the gold_labeled_reviews parquet.
+    """Load one user's reviews from the gold_labeled_reviews parquet.
 
-    Parameters
-    ----------
-    gold_reviews_path : str | Path
-        Path to gold_labeled_reviews_*.parquet.
-    user_id : int | str
-        The Food.com user_id to look up.
-    culinary_tags : tuple[str, ...]
-        Ordered list of the 17 tag names (from Settings.culinary_tags).
-    min_reviews : int
-        Minimum number of reviews required; returns ([], False) if below threshold.
-
-    Returns
-    -------
-    records : list[ReviewRecord]
-    ok : bool
-        False if the user has fewer than min_reviews reviews.
+    Returns (records, True) on success, or ([], False) if the user has fewer
+    than min_reviews reviews.
     """
     df = pd.read_parquet(gold_reviews_path)
 
@@ -139,10 +112,7 @@ def get_eligible_user_ids(
     gold_reviews_path: Any,
     min_reviews: int = 5,
 ) -> List[Any]:
-    """
-    Return sorted list of user_ids with >= min_reviews reviews.
-    Used to populate the Streamlit dropdown.
-    """
+    """Return users with at least min_reviews reviews, sorted for the UI dropdown."""
     df = pd.read_parquet(gold_reviews_path, columns=["user_id"])
     counts = df["user_id"].value_counts()
     return sorted(counts[counts >= min_reviews].index.tolist())
@@ -155,26 +125,7 @@ def build_user_profile(
     culinary_tags: tuple[str, ...],
     half_life_days: int = 365,
 ) -> UserProfile:
-    """
-    Compute a UserProfile from a list of ReviewRecords and the embedding bundle.
-
-    Parameters
-    ----------
-    records : list[ReviewRecord]
-        The user's review history (output of load_user_review_history).
-    user_id : int | str
-        User identifier (stored on the profile for reference).
-    bundle : dict
-        The Phase 2 embedding bundle: {recipe_ids, embeddings, predictions}.
-    culinary_tags : tuple[str, ...]
-        Ordered tag names — defines the axis ordering of tag_affinity.
-    half_life_days : int
-        Recency decay half-life in days.
-
-    Returns
-    -------
-    UserProfile
-    """
+    """Build a UserProfile from review history and the Phase 2 embedding bundle."""
     if not records:
         return UserProfile(
             user_id=user_id,
@@ -185,18 +136,17 @@ def build_user_profile(
             rated_recipe_ids=set(),
         )
 
-    # Anchor decay to the user's most recent review rather than today.
-    # Food.com data is historical (reviews end ~2013); using today's date
-    # reduces all signals to near-zero for older users.
+    # Anchor to most recent review — Food.com data ends ~2013 so using today's
+    # date would decay all signals to near-zero.
     now = max(r.timestamp for r in records)
     rated_ids = {r.recipe_id for r in records}
 
-    # Build a fast recipe_id → embedding index lookup
+    # Fast recipe_id → index lookup into the embedding matrix
     bundle_ids = [int(rid) for rid in bundle["recipe_ids"]]
     id_to_idx = {rid: idx for idx, rid in enumerate(bundle_ids)}
     raw_embeddings: torch.Tensor = bundle["embeddings"]  # (N, 128)
 
-    # ── Weighted embedding mean ──────────────────────────────────────────────
+    # Weighted embedding mean
     weighted_vecs: List[torch.Tensor] = []
     embedding_weights: List[float] = []
 
@@ -217,11 +167,7 @@ def build_user_profile(
     else:
         user_embedding = None
 
-    # ── Tag affinity vector ──────────────────────────────────────────────────
-    # affinity[t] = mean over reviews of (rating_deviation * intensity_t)
-    # Positive tags pull affinity up when rated highly; negative tags pull
-    # affinity down (negative deviation) when their intensity is high — both
-    # cases correctly signal what the user does/doesn't want.
+    # Tag affinity: weighted mean of (rating deviation × tag intensity) per tag
     tag_affinity = np.zeros(len(culinary_tags), dtype=np.float32)
     tag_counts   = np.zeros(len(culinary_tags), dtype=np.float32)
 

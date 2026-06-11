@@ -207,9 +207,11 @@ recipe-recommender/
 │   ├── entrypoint.sh                 # Container startup — waits for ES, launches Streamlit
 │   └── build-and-push.ps1            # One-time script to build and publish images
 │
+├── report/
+│   └── DSCI641 Final Report.pdf
+│
 ├── data/                       # Excluded from git — baked into Docker images
 ├── main.py                     # Unified CLI entry point
-├── CAPSTONE_OVERVIEW.md        # Full project narrative for presentation/report
 ├── requirements.txt
 └── README.md
 ```

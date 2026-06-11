@@ -51,7 +51,7 @@ import pandas as pd
 
 from core.config import load_settings, get_es_client
 from recommender.engine import RecommenderEngine
-from recommender.profile import build_user_profile, load_user_review_history
+from recommender.profile import build_user_profile
 from search.engine import SearchEngine, SearchMode
 
 

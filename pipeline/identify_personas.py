@@ -8,7 +8,6 @@ exclusive assignment (highest-confidence archetype first, so no user appears twi
 from __future__ import annotations
 
 import sys
-import textwrap
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Tuple
